@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 
 export type TileState = "hidden" | "diamond" | "mine";
 
@@ -127,8 +127,10 @@ function shouldBeMine(
   return Math.random() < riggedProb;
 }
 
+// Module-level session profit tracker (persists across renders, no HMR issues)
+let sessionProfit = 0;
+
 export function useMinesGame() {
-  const sessionProfitRef = useRef(0); // Track session-level profit for the user
 
   const [state, setState] = useState<GameState>({
     grid: Array(GRID_SIZE).fill("hidden"),
@@ -168,7 +170,7 @@ export function useMinesGame() {
       const isMine = shouldBeMine(
         prev.mineCount,
         safeRevealed,
-        sessionProfitRef.current,
+        sessionProfit,
         prev.betAmount
       );
 
@@ -196,7 +198,7 @@ export function useMinesGame() {
         });
 
         // User lost this bet
-        sessionProfitRef.current -= prev.betAmount;
+        sessionProfit -= prev.betAmount;
 
         return {
           ...prev,
@@ -219,7 +221,7 @@ export function useMinesGame() {
       const totalSafe = GRID_SIZE - prev.mineCount;
       if (newSafeCount >= totalSafe) {
         const winnings = prev.betAmount * multiplier;
-        sessionProfitRef.current += (winnings - prev.betAmount);
+        sessionProfit += (winnings - prev.betAmount);
         return {
           ...prev,
           grid: newGrid,
@@ -258,7 +260,7 @@ export function useMinesGame() {
         newGrid[pos] = "mine";
       });
 
-      sessionProfitRef.current += (winnings - prev.betAmount);
+      sessionProfit += (winnings - prev.betAmount);
 
       return {
         ...prev,
