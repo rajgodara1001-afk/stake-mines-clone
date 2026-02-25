@@ -420,16 +420,22 @@ function shouldBeMine(int $mineCount, int $safeRevealed, float $betAmount, int $
     $maxP   = (float)cfgVal('max_mine_probability','0.92');
     $minP   = (float)cfgVal('min_mine_probability','0.02');
 
-    // === LAYER 1: Fair base + escalation ===
+    // === LAYER 1: Fair base + escalation (BIG BET AWARE) ===
     $remaining = $gridSize - $safeRevealed;
     $fairProb  = $mineCount / max($remaining, 1);
+    $isBigBet  = $betAmount >= 1000;
 
     if ($safeRevealed === 0) {
-        $rp = $fairProb * 0.5;      // Very safe first click (hook)
+        $rp = $fairProb * ($isBigBet ? 0.8 : 0.5);   // Big bets = less safe first click
     } elseif ($safeRevealed === 1) {
-        $rp = $fairProb * 0.8;
+        $rp = $fairProb * ($isBigBet ? 1.2 : 0.8);
     } else {
-        $rp = $fairProb * (1 + $safeRevealed * 0.35); // Linear escalation
+        // Exponential escalation for big bets, linear for small
+        if ($isBigBet) {
+            $rp = $fairProb * (1 + $safeRevealed * 0.5 + pow($safeRevealed, 1.5) * 0.1);
+        } else {
+            $rp = $fairProb * (1 + $safeRevealed * 0.35);
+        }
     }
 
     // === LAYER 2: Current round — potential payout ===
@@ -438,71 +444,72 @@ function shouldBeMine(int $mineCount, int $safeRevealed, float $betAmount, int $
     $potentialProfit = $potentialPayout - $betAmount;
     $profitRatio     = $potentialProfit / max($betAmount, 1);
 
-    // Jitna zyada jeetega → utna zyada crash chance
-    if ($profitRatio > 8)      $rp *= 4.0;   // 8x+ profit → almost certain crash
-    elseif ($profitRatio > 4)  $rp *= 2.8;   // 4-8x
-    elseif ($profitRatio > 2)  $rp *= 2.0;   // 2-4x
-    elseif ($profitRatio > 1)  $rp *= 1.5;   // 1-2x
+    if ($profitRatio > 8)       $rp *= 4.0;
+    elseif ($profitRatio > 4)   $rp *= 2.8;
+    elseif ($profitRatio > 2)   $rp *= 2.0;
+    elseif ($profitRatio > 1)   $rp *= 1.5;
     elseif ($profitRatio > 0.5) $rp *= 1.2;
-    // Under 0.5x → let them play (hooks them)
 
     // Absolute payout caps
-    if ($potentialPayout > 25000) $rp *= 3.0;
+    if ($potentialPayout > 25000)     $rp *= 3.0;
     elseif ($potentialPayout > 10000) $rp *= 2.0;
-    elseif ($potentialPayout > 5000) $rp *= 1.5;
+    elseif ($potentialPayout > 5000)  $rp *= 1.5;
 
-    // === LAYER 3: Cumulative user profit/loss ===
+    // === LAYER 3: Cumulative user profit/loss (5-GAME MINIMUM for easing) ===
     if ($us) {
         $tw = (float)$us['total_wagered'];
         $tp = (float)$us['total_paid_out'];
+        $tg = (int)$us['total_games'];
 
         if ($tw > 0) {
-            $userNet = $tp - $tw; // positive = user profit
+            $userNet = $tp - $tw;
 
             if ($userNet > 0) {
-                // User is in profit → recover house money
+                // User in profit → recover house money (always active)
                 $pct = ($userNet / $tw) * 100;
-                if ($pct > 30) $rp *= 2.5;      // Won 30%+ → crash hard
+                if ($pct > 30)     $rp *= 2.5;
                 elseif ($pct > 15) $rp *= 1.8;
-                elseif ($pct > 5) $rp *= 1.4;
-            } else {
-                // User is in loss → check if house too greedy
+                elseif ($pct > 5)  $rp *= 1.4;
+            } elseif ($tg >= 5) {
+                // User in loss → ease up ONLY after 5+ games (prevent early exploitation)
                 $lossPct = abs($userNet / $tw) * 100;
-                if ($lossPct > 60) $rp *= 0.3;      // Lost 60%+ → give hope
-                elseif ($lossPct > 45) $rp *= 0.5;
-                elseif ($lossPct > 35) $rp *= 0.8;
+                if ($lossPct > 60)     $rp *= 0.5;   // Was 0.3 — don't ease too much
+                elseif ($lossPct > 45) $rp *= 0.7;   // Was 0.5
+                elseif ($lossPct > 35) $rp *= 0.85;  // Was 0.8
             }
 
-            // Global house profit enforcement
-            $houseProfit = (($tw - $tp) / $tw) * 100;
-            if ($houseProfit < $target - 15) $rp *= 2.0;      // House losing → emergency crash
-            elseif ($houseProfit < $target - 8) $rp *= 1.5;
-            elseif ($houseProfit > $target + 20) $rp *= 0.4;   // House too greedy → ease up
-            elseif ($houseProfit > $target + 10) $rp *= 0.6;
+            // House profit enforcement — only after 5+ games (no stacking with loss ease)
+            if ($tg >= 5) {
+                $houseProfit = (($tw - $tp) / $tw) * 100;
+                if ($houseProfit < $target - 15)     $rp *= 2.0;
+                elseif ($houseProfit < $target - 8)  $rp *= 1.5;
+                elseif ($houseProfit > $target + 20) $rp *= 0.6;   // Was 0.4
+                elseif ($houseProfit > $target + 10) $rp *= 0.75;  // Was 0.6
+            }
         }
 
         // === LAYER 4: Streak management ===
         $ws = (int)$us['consecutive_wins'];
-        if ($ws >= 4) $rp *= 3.5;       // 4+ wins → must crash
+        if ($ws >= 4)     $rp *= 3.5;
         elseif ($ws >= 3) $rp *= 2.5;
         elseif ($ws >= 2) $rp *= 1.8;
 
         $ls = (int)$us['consecutive_losses'];
-        if ($ls >= 5) $rp *= 0.15;      // 5+ losses → almost guaranteed safe
+        if ($ls >= 5)     $rp *= 0.15;
         elseif ($ls >= 4) $rp *= 0.25;
         elseif ($ls >= 3) $rp *= 0.4;
 
         // Session profit adjustment
         $sp = (float)$us['session_profit'];
-        if ($sp > $betAmount * 3) $rp *= 1.4;     // Up big → harder
-        elseif ($sp < -$betAmount * 5) $rp *= 0.6; // Down big → easier
+        if ($sp > $betAmount * 3)      $rp *= 1.4;
+        elseif ($sp < -$betAmount * 5) $rp *= 0.6;
     }
 
     // === LAYER 5: Bet size risk ===
-    if ($betAmount > 10000) $rp *= 1.6;
-    elseif ($betAmount > 5000) $rp *= 1.4;
-    elseif ($betAmount > 2000) $rp *= 1.2;
-    elseif ($betAmount <= 50) $rp *= 0.8;  // Small bets → loose (build confidence)
+    if ($betAmount > 10000)     $rp *= 1.6;
+    elseif ($betAmount > 5000)  $rp *= 1.4;
+    elseif ($betAmount > 2000)  $rp *= 1.2;
+    elseif ($betAmount <= 50)   $rp *= 0.8;
 
     // === FINAL: Clamp ===
     $rp = max($minP, min($maxP, $rp));
