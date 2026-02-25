@@ -57,6 +57,14 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        game: {
+          bg: "hsl(var(--game-bg))",
+          tile: "hsl(var(--game-tile))",
+          "tile-hover": "hsl(var(--game-tile-hover))",
+          win: "hsl(var(--game-win))",
+          lose: "hsl(var(--game-lose))",
+          gold: "hsl(var(--game-gold))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -65,25 +73,34 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
+        "tile-reveal": {
+          "0%": { transform: "rotateY(0deg) scale(1)" },
+          "50%": { transform: "rotateY(90deg) scale(0.9)" },
+          "100%": { transform: "rotateY(0deg) scale(1)" },
+        },
+        "tile-shake": {
+          "0%, 100%": { transform: "translateX(0)" },
+          "25%": { transform: "translateX(-4px)" },
+          "75%": { transform: "translateX(4px)" },
+        },
+        "pulse-glow": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.6" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "tile-reveal": "tile-reveal 0.4s ease-in-out",
+        "tile-shake": "tile-shake 0.3s ease-in-out",
+        "pulse-glow": "pulse-glow 2s ease-in-out infinite",
       },
     },
   },
