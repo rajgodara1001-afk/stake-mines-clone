@@ -18,22 +18,22 @@ export function MinesTile({ state, index, onClick, disabled }: MinesTileProps) {
       onClick={() => onClick(index)}
       disabled={disabled || isRevealed}
       className={cn(
-        "relative aspect-square rounded-lg transition-all duration-200 border border-border",
+        "relative aspect-square rounded-lg transition-all duration-150",
         "flex items-center justify-center overflow-hidden",
-        !isRevealed && !disabled && "bg-game-tile hover:bg-game-tile-hover hover:scale-105 cursor-pointer active:scale-95",
-        !isRevealed && disabled && "bg-game-tile opacity-60 cursor-not-allowed",
-        state === "diamond" && "bg-game-win/20 tile-glow-green animate-tile-reveal",
-        state === "mine" && "bg-game-lose/20 tile-glow-red animate-tile-shake"
+        !isRevealed && !disabled && "bg-game-tile hover:bg-game-tile-hover active:scale-[0.92] cursor-pointer",
+        !isRevealed && disabled && "bg-game-tile opacity-50 cursor-not-allowed",
+        state === "diamond" && "bg-game-win/15 tile-glow-green animate-tile-reveal",
+        state === "mine" && "bg-game-lose/15 tile-glow-red animate-tile-shake"
       )}
     >
       {state === "hidden" && (
-        <div className="w-3 h-3 rounded-full bg-muted-foreground/20" />
+        <div className="w-2.5 h-2.5 rounded-full bg-muted-foreground/15" />
       )}
       {state === "diamond" && (
-        <img src={diamondImg} alt="Diamond" className="w-3/4 h-3/4 object-contain drop-shadow-lg" />
+        <img src={diamondImg} alt="Diamond" className="w-[70%] h-[70%] object-contain" />
       )}
       {state === "mine" && (
-        <img src={mineImg} alt="Mine" className="w-3/4 h-3/4 object-contain drop-shadow-lg" />
+        <img src={mineImg} alt="Mine" className="w-[70%] h-[70%] object-contain" />
       )}
     </button>
   );
