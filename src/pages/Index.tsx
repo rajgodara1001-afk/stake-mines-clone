@@ -31,8 +31,8 @@ const Index = () => {
       </header>
 
       {/* Grid area - centered */}
-      <div className="flex-1 flex items-center justify-center px-3 py-2 min-h-0">
-        <div className="w-full max-w-[380px] sm:max-w-[420px]">
+      <div className="flex-1 flex items-center justify-center px-2 sm:px-3 py-1 sm:py-2 min-h-0">
+        <div className="w-full max-w-[min(90vw,340px)] sm:max-w-[420px]">
           <MinesGrid
             grid={game.grid}
             onTileClick={game.revealTile}
@@ -45,10 +45,10 @@ const Index = () => {
       </div>
 
       {/* Bottom controls */}
-      <div className="flex-shrink-0 glass-surface border-t border-border/50 px-4 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+      <div className="flex-shrink-0 glass-surface border-t border-border/50 px-3 sm:px-4 pt-2 sm:pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {/* Live stats - only during game */}
         {isPlaying && game.revealed.size > 0 && (
-          <div className="grid grid-cols-3 gap-2 mb-3 animate-float-up">
+          <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-2 sm:mb-3 animate-float-up">
             {[
               { label: "Multiplier", value: `${game.currentMultiplier}×`, accent: true },
               { label: "Next", value: `${game.nextMultiplier}×`, accent: false },
@@ -66,19 +66,19 @@ const Index = () => {
         )}
 
         {/* Mines selector */}
-        <div className="mb-2.5">
-          <label className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-semibold mb-1.5 block">
+        <div className="mb-2">
+          <label className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-semibold mb-1 block">
             <Gem className="w-3 h-3 inline-block mr-1 -mt-0.5" />
             Mines Count
           </label>
-          <div className="flex gap-1.5">
+          <div className="flex gap-1 sm:gap-1.5">
             {MINE_OPTIONS.map((count) => (
               <button
                 key={count}
                 onClick={() => game.setMineCount(count)}
                 disabled={isPlaying}
                 className={cn(
-                  "flex-1 h-9 rounded-lg text-xs font-bold transition-all duration-150",
+                  "flex-1 h-8 sm:h-9 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-150",
                   game.mineCount === count
                     ? "bg-primary text-primary-foreground shadow-[0_0_12px_hsl(145_72%_44%/0.3)] scale-[1.05]"
                     : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80",
@@ -92,38 +92,38 @@ const Index = () => {
         </div>
 
         {/* Bet amount */}
-        <div className="mb-3">
-          <label className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-semibold mb-1.5 block">
+        <div className="mb-2 sm:mb-3">
+          <label className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-semibold mb-1 block">
             Bet Amount
           </label>
-          <div className="flex items-center gap-1.5 mb-1.5">
+          <div className="flex items-center gap-1 sm:gap-1.5 mb-1 sm:mb-1.5">
             <button
               onClick={() => game.setBetAmount(Math.max(10, game.betAmount - 50))}
               disabled={isPlaying}
-              className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/80 active:scale-95 disabled:opacity-30 transition-all"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/80 active:scale-95 disabled:opacity-30 transition-all"
             >
               <Minus className="w-4 h-4" />
             </button>
             <div className="flex-1 relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-mono">₹</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs sm:text-sm font-mono">₹</span>
               <input
                 type="number"
                 value={game.betAmount}
                 onChange={(e) => game.setBetAmount(Number(e.target.value))}
                 disabled={isPlaying}
-                className="w-full bg-secondary rounded-xl pl-7 pr-3 py-2.5 font-mono text-foreground text-sm text-center border border-border/40 outline-none focus:border-primary/50 focus:shadow-[0_0_0_2px_hsl(145_72%_44%/0.1)] disabled:opacity-30 transition-all"
+                className="w-full bg-secondary rounded-xl pl-6 sm:pl-7 pr-3 py-2 sm:py-2.5 font-mono text-foreground text-xs sm:text-sm text-center border border-border/40 outline-none focus:border-primary/50 focus:shadow-[0_0_0_2px_hsl(145_72%_44%/0.1)] disabled:opacity-30 transition-all"
               />
             </div>
             <button
               onClick={() => game.setBetAmount(game.betAmount + 50)}
               disabled={isPlaying}
-              className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/80 active:scale-95 disabled:opacity-30 transition-all"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/80 active:scale-95 disabled:opacity-30 transition-all"
             >
               <Plus className="w-4 h-4" />
             </button>
           </div>
           {/* Quick bets */}
-          <div className="flex gap-1.5">
+          <div className="flex gap-1 sm:gap-1.5">
             <button
               onClick={() => game.setBetAmount(Math.max(10, Math.floor(game.betAmount / 2)))}
               disabled={isPlaying}
@@ -162,7 +162,7 @@ const Index = () => {
             onClick={game.cashOut}
             disabled={game.revealed.size === 0}
             className={cn(
-              "w-full h-12 rounded-xl text-base font-extrabold transition-all duration-200",
+              "w-full h-11 sm:h-12 rounded-xl text-sm sm:text-base font-extrabold transition-all duration-200",
               "bg-game-win text-primary-foreground btn-glow-green",
               "hover:brightness-110 active:scale-[0.98]",
               "disabled:opacity-40 disabled:shadow-none"
@@ -176,7 +176,7 @@ const Index = () => {
             onClick={game.startGame}
             disabled={game.betAmount > game.balance || game.betAmount <= 0}
             className={cn(
-              "w-full h-12 rounded-xl text-base font-extrabold transition-all duration-200",
+              "w-full h-11 sm:h-12 rounded-xl text-sm sm:text-base font-extrabold transition-all duration-200",
               "bg-primary text-primary-foreground btn-glow-primary",
               "hover:brightness-110 active:scale-[0.98]",
               "disabled:opacity-40 disabled:shadow-none"

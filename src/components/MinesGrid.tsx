@@ -19,7 +19,7 @@ export function MinesGrid({ grid, onTileClick, disabled, gameStatus, currentMult
   return (
     <div className="relative w-full">
       {/* Grid container with subtle pattern */}
-      <div className="grid grid-cols-5 gap-[6px] sm:gap-2 w-full p-2.5 sm:p-3 rounded-2xl glass-surface">
+      <div className="grid grid-cols-5 gap-1 xs:gap-[6px] sm:gap-2 w-full p-1.5 xs:p-2.5 sm:p-3 rounded-2xl glass-surface">
         {grid.map((tile, i) => (
           <MinesTile
             key={i}
