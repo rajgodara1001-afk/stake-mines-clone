@@ -18,38 +18,42 @@ interface GameState {
   balance: number;
   currentMultiplier: number;
   currentProfit: number;
+  rows: number;
 }
 
-const GRID_SIZE = 25;
+const COLS = 5;
+
+function getGridSize(rows: number) {
+  return rows * COLS;
+}
 
 // Display multiplier calculation
-function calculateMultiplier(mineCount: number, revealed: number): number {
+function calculateMultiplier(mineCount: number, revealed: number, gridSize: number): number {
   if (revealed === 0) return 1;
   const config = getConfig();
   let multiplier = 1;
   for (let i = 0; i < revealed; i++) {
-    const safe = GRID_SIZE - mineCount - i;
+    const safe = gridSize - mineCount - i;
     if (safe > 0) {
-      multiplier *= (GRID_SIZE - i) / safe;
+      multiplier *= (gridSize - i) / safe;
     }
   }
-  multiplier *= 0.97; // base house edge on display
-  // Cap at max multiplier
+  multiplier *= 0.97;
   multiplier = Math.min(multiplier, config.maxMultiplier);
   return Math.round(multiplier * 100) / 100;
 }
 
-// Place mines on remaining tiles for display after game ends
 function placeMinesOnRemaining(
   revealedSafe: Set<number>,
   mineCount: number,
+  gridSize: number,
   hitMineIndex?: number
 ): Set<number> {
   const mines = new Set<number>();
   if (hitMineIndex !== undefined) mines.add(hitMineIndex);
 
   const available: number[] = [];
-  for (let i = 0; i < GRID_SIZE; i++) {
+  for (let i = 0; i < gridSize; i++) {
     if (!revealedSafe.has(i) && i !== hitMineIndex) available.push(i);
   }
   for (let i = available.length - 1; i > 0; i--) {
@@ -62,27 +66,22 @@ function placeMinesOnRemaining(
   return mines;
 }
 
-/**
- * Dynamic mine decision engine with house edge enforcement.
- * Uses cumulative profit tracking + streak management to guarantee ~40% house profit.
- */
 function shouldBeMine(
   mineCount: number,
   safeRevealed: number,
-  currentBet: number
+  currentBet: number,
+  gridSize: number
 ): boolean {
   const stats = getStats();
   const config = getConfig();
   const houseProfit = getHouseProfitPercent();
-  const target = config.houseEdgeTarget * 100; // e.g. 40
+  const target = config.houseEdgeTarget * 100;
 
-  // Fair probability
-  const fairProb = mineCount / (GRID_SIZE - safeRevealed);
+  const fairProb = mineCount / (gridSize - safeRevealed);
 
-  // Base rigged probability - escalates with reveals
   let riggedProb: number;
   if (safeRevealed === 0) {
-    riggedProb = fairProb * 0.6; // First click: hook them
+    riggedProb = fairProb * 0.6;
   } else if (safeRevealed === 1) {
     riggedProb = fairProb * 0.85;
   } else if (safeRevealed <= 3) {
@@ -93,56 +92,33 @@ function shouldBeMine(
     riggedProb = fairProb * 3.0;
   }
 
-  // House profit enforcement
   if (stats.totalWagered > 0) {
-    if (houseProfit < target - 10) {
-      // House is losing money - aggressively increase mines
-      riggedProb *= 1.6;
-    } else if (houseProfit < target - 5) {
-      riggedProb *= 1.3;
-    } else if (houseProfit > target + 15) {
-      // House is way too profitable - ease up to retain players
-      riggedProb *= 0.5;
-    } else if (houseProfit > target + 8) {
-      riggedProb *= 0.7;
-    }
+    if (houseProfit < target - 10) riggedProb *= 1.6;
+    else if (houseProfit < target - 5) riggedProb *= 1.3;
+    else if (houseProfit > target + 15) riggedProb *= 0.5;
+    else if (houseProfit > target + 8) riggedProb *= 0.7;
   }
 
-  // Win streak breaker: after 2 consecutive wins, force loss
-  if (stats.consecutiveWins >= 2) {
-    riggedProb *= 1.8;
-  }
-  if (stats.consecutiveWins >= 3) {
-    riggedProb *= 2.0;
-  }
+  if (stats.consecutiveWins >= 2) riggedProb *= 1.8;
+  if (stats.consecutiveWins >= 3) riggedProb *= 2.0;
+  if (stats.consecutiveLosses >= 3) riggedProb *= 0.4;
+  if (stats.consecutiveLosses >= 5) riggedProb *= 0.3;
 
-  // Loss recovery hook: after 3+ losses, give a small win
-  if (stats.consecutiveLosses >= 3) {
-    riggedProb *= 0.4;
-  }
-  if (stats.consecutiveLosses >= 5) {
-    riggedProb *= 0.3;
-  }
-
-  // High multiplier protection
-  const currentMult = calculateMultiplier(mineCount, safeRevealed + 1);
+  const currentMult = calculateMultiplier(mineCount, safeRevealed + 1, gridSize);
   if (currentMult > 3) riggedProb *= 1.5;
   if (currentMult > 5) riggedProb *= 1.8;
   if (currentMult > 10) riggedProb *= 2.5;
 
-  // Big bet protection
   if (currentBet > 1000) riggedProb *= 1.2;
   if (currentBet > 5000) riggedProb *= 1.4;
 
-  // Clamp between 3% and 90%
   riggedProb = Math.max(0.03, Math.min(0.90, riggedProb));
-
   return Math.random() < riggedProb;
 }
 
 export function useMinesGame() {
   const [state, setState] = useState<GameState>({
-    grid: Array(GRID_SIZE).fill("hidden"),
+    grid: Array(getGridSize(3)).fill("hidden"),
     minePositions: new Set(),
     revealed: new Set(),
     gameStatus: "idle",
@@ -151,7 +127,31 @@ export function useMinesGame() {
     balance: 10000,
     currentMultiplier: 1,
     currentProfit: 0,
+    rows: 3,
   });
+
+  const gridSize = getGridSize(state.rows);
+  const maxMines = gridSize - 1;
+
+  const setRows = useCallback((rows: number) => {
+    setState((prev) => {
+      if (prev.gameStatus === "playing") return prev;
+      const newRows = Math.max(3, Math.min(5, rows));
+      const newGridSize = getGridSize(newRows);
+      const newMineCount = Math.min(prev.mineCount, newGridSize - 1);
+      return {
+        ...prev,
+        rows: newRows,
+        grid: Array(newGridSize).fill("hidden"),
+        minePositions: new Set(),
+        revealed: new Set(),
+        mineCount: newMineCount,
+        gameStatus: "idle",
+        currentMultiplier: 1,
+        currentProfit: 0,
+      };
+    });
+  }, []);
 
   const startGame = useCallback(() => {
     const config = getConfig();
@@ -160,7 +160,7 @@ export function useMinesGame() {
 
     setState((prev) => ({
       ...prev,
-      grid: Array(GRID_SIZE).fill("hidden"),
+      grid: Array(getGridSize(prev.rows)).fill("hidden"),
       minePositions: new Set(),
       revealed: new Set(),
       gameStatus: "playing",
@@ -173,12 +173,13 @@ export function useMinesGame() {
   const revealTile = useCallback((index: number) => {
     setState((prev) => {
       if (prev.gameStatus !== "playing" || prev.revealed.has(index)) return prev;
+      const gs = getGridSize(prev.rows);
 
       const safeRevealed = Array.from(prev.revealed).filter(
         (i) => prev.grid[i] === "diamond"
       ).length;
 
-      const isMine = shouldBeMine(prev.mineCount, safeRevealed, prev.betAmount);
+      const isMine = shouldBeMine(prev.mineCount, safeRevealed, prev.betAmount, gs);
 
       const newRevealed = new Set(prev.revealed);
       newRevealed.add(index);
@@ -191,10 +192,8 @@ export function useMinesGame() {
           if (prev.grid[i] === "diamond") safeSet.add(i);
         });
 
-        const displayMines = placeMinesOnRemaining(safeSet, prev.mineCount, index);
-        displayMines.forEach((pos) => {
-          newGrid[pos] = "mine";
-        });
+        const displayMines = placeMinesOnRemaining(safeSet, prev.mineCount, gs, index);
+        displayMines.forEach((pos) => { newGrid[pos] = "mine"; });
 
         recordGame({
           betAmount: prev.betAmount,
@@ -215,13 +214,12 @@ export function useMinesGame() {
         };
       }
 
-      // Safe tile
       newGrid[index] = "diamond";
       const newSafeCount = safeRevealed + 1;
-      const multiplier = calculateMultiplier(prev.mineCount, newSafeCount);
+      const multiplier = calculateMultiplier(prev.mineCount, newSafeCount, gs);
       const profit = prev.betAmount * multiplier - prev.betAmount;
 
-      const totalSafe = GRID_SIZE - prev.mineCount;
+      const totalSafe = gs - prev.mineCount;
       if (newSafeCount >= totalSafe) {
         const winnings = prev.betAmount * multiplier;
         recordGame({
@@ -256,17 +254,16 @@ export function useMinesGame() {
   const cashOut = useCallback(() => {
     setState((prev) => {
       if (prev.gameStatus !== "playing" || prev.revealed.size === 0) return prev;
+      const gs = getGridSize(prev.rows);
       const winnings = prev.betAmount * prev.currentMultiplier;
 
       const safeSet = new Set<number>();
       prev.revealed.forEach((i) => {
         if (prev.grid[i] === "diamond") safeSet.add(i);
       });
-      const displayMines = placeMinesOnRemaining(safeSet, prev.mineCount);
+      const displayMines = placeMinesOnRemaining(safeSet, prev.mineCount, gs);
       const newGrid = [...prev.grid];
-      displayMines.forEach((pos) => {
-        newGrid[pos] = "mine";
-      });
+      displayMines.forEach((pos) => { newGrid[pos] = "mine"; });
 
       recordGame({
         betAmount: prev.betAmount,
@@ -296,22 +293,27 @@ export function useMinesGame() {
   const setMineCount = useCallback((count: number) => {
     setState((prev) => {
       if (prev.gameStatus === "playing") return prev;
-      return { ...prev, mineCount: Math.max(1, Math.min(24, count)) };
+      const gs = getGridSize(prev.rows);
+      return { ...prev, mineCount: Math.max(1, Math.min(gs - 1, count)) };
     });
   }, []);
 
   const nextMultiplier = calculateMultiplier(
     state.mineCount,
-    Array.from(state.revealed).filter((i) => state.grid[i] === "diamond").length + 1
+    Array.from(state.revealed).filter((i) => state.grid[i] === "diamond").length + 1,
+    gridSize
   );
 
   return {
     ...state,
+    gridSize,
+    maxMines,
     startGame,
     revealTile,
     cashOut,
     setBetAmount,
     setMineCount,
+    setRows,
     nextMultiplier,
   };
 }
