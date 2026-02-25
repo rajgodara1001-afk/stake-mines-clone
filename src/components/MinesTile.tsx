@@ -8,9 +8,10 @@ interface MinesTileProps {
   index: number;
   onClick: (index: number) => void;
   disabled: boolean;
+  gameOver: boolean;
 }
 
-export function MinesTile({ state, index, onClick, disabled }: MinesTileProps) {
+export function MinesTile({ state, index, onClick, disabled, gameOver }: MinesTileProps) {
   const isRevealed = state !== "hidden";
 
   return (
@@ -18,24 +19,50 @@ export function MinesTile({ state, index, onClick, disabled }: MinesTileProps) {
       onClick={() => onClick(index)}
       disabled={disabled || isRevealed}
       className={cn(
-        "relative aspect-square rounded-xl transition-all duration-200",
+        "relative aspect-square rounded-xl transition-all duration-150 select-none",
         "flex items-center justify-center overflow-hidden",
-        // Hidden state
-        !isRevealed && !disabled && "bg-game-tile hover:bg-game-tile-hover active:scale-[0.90] cursor-pointer border border-border/50 hover:border-primary/30",
-        !isRevealed && disabled && "bg-game-tile opacity-40 cursor-not-allowed border border-border/30",
-        // Revealed states
-        state === "diamond" && "bg-game-win/10 border border-game-win/30 tile-glow-green animate-tile-reveal",
-        state === "mine" && "bg-game-lose/10 border border-game-lose/30 tile-glow-red animate-tile-shake"
+        // Hidden - playable
+        !isRevealed && !disabled &&
+          "bg-game-tile hover:bg-game-tile-hover active:bg-game-tile-active active:scale-[0.92] cursor-pointer tile-idle-glow hover:scale-[1.03]",
+        // Hidden - disabled (game over, show dimmed)
+        !isRevealed && disabled && !gameOver &&
+          "bg-game-tile opacity-30 cursor-not-allowed",
+        !isRevealed && disabled && gameOver &&
+          "bg-game-tile opacity-50 cursor-default",
+        // Diamond revealed
+        state === "diamond" &&
+          "bg-gradient-to-br from-[hsl(145_72%_44%/0.15)] to-[hsl(145_72%_44%/0.05)] tile-glow-green animate-tile-reveal",
+        // Mine revealed
+        state === "mine" &&
+          "bg-gradient-to-br from-[hsl(0_75%_55%/0.15)] to-[hsl(0_75%_55%/0.05)] tile-glow-red animate-tile-shake"
       )}
     >
+      {/* Hidden dot indicator */}
       {state === "hidden" && (
-        <div className="w-3 h-3 rounded-full bg-muted-foreground/10" />
+        <div className="w-2.5 h-2.5 rounded-full bg-muted-foreground/15" />
       )}
+
+      {/* Diamond */}
       {state === "diamond" && (
-        <img src={diamondImg} alt="Diamond" className="w-[60%] h-[60%] object-contain drop-shadow-lg" />
+        <div className="relative">
+          <img
+            src={diamondImg}
+            alt="Diamond"
+            className="w-[55%] h-[55%] mx-auto object-contain drop-shadow-[0_0_8px_hsl(145_72%_44%/0.5)]"
+          />
+          {/* Pulse ring effect */}
+          <div className="absolute inset-0 rounded-full border border-game-win/30" 
+               style={{ animation: 'pulse-ring 0.6s ease-out forwards' }} />
+        </div>
       )}
+
+      {/* Mine */}
       {state === "mine" && (
-        <img src={mineImg} alt="Mine" className="w-[60%] h-[60%] object-contain drop-shadow-lg" />
+        <img
+          src={mineImg}
+          alt="Mine"
+          className="w-[55%] h-[55%] object-contain drop-shadow-[0_0_8px_hsl(0_75%_55%/0.5)]"
+        />
       )}
     </button>
   );
