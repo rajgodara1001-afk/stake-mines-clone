@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 
 interface MinesGridProps {
   grid: TileState[];
+  rows: number;
   onTileClick: (index: number) => void;
   disabled: boolean;
   gameStatus: "idle" | "playing" | "won" | "lost";
@@ -11,18 +12,24 @@ interface MinesGridProps {
   betAmount: number;
 }
 
-export function MinesGrid({ grid, onTileClick, disabled, gameStatus, currentMultiplier, betAmount }: MinesGridProps) {
+const rowsClass: Record<number, string> = {
+  3: "grid-rows-3",
+  4: "grid-rows-4",
+  5: "grid-rows-5",
+};
+
+export function MinesGrid({ grid, rows, onTileClick, disabled, gameStatus, currentMultiplier, betAmount }: MinesGridProps) {
   const showOverlay = gameStatus === "won" || gameStatus === "lost";
   const isWon = gameStatus === "won";
   const gameOver = gameStatus === "won" || gameStatus === "lost";
 
   return (
     <div className="relative w-full h-full">
-      {/* Grid container - premium dark with inner shadow */}
       <div className={cn(
-        "grid grid-cols-5 grid-rows-5 gap-1.5 sm:gap-2.5 w-full h-full p-2.5 sm:p-4",
+        "grid grid-cols-5 gap-1.5 sm:gap-2.5 w-full h-full p-2.5 sm:p-4",
         "rounded-2xl sm:rounded-3xl",
         "grid-container",
+        rowsClass[rows] || "grid-rows-3",
         gameStatus === "lost" && "grid-container-lost"
       )}>
         {grid.map((tile, i) => (
@@ -37,7 +44,6 @@ export function MinesGrid({ grid, onTileClick, disabled, gameStatus, currentMult
         ))}
       </div>
 
-      {/* Result overlay */}
       {showOverlay && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none animate-float-up z-20">
           <div className={cn(
@@ -47,7 +53,6 @@ export function MinesGrid({ grid, onTileClick, disabled, gameStatus, currentMult
               ? "border-game-win/50 bg-[hsl(225_28%_4%/0.92)] shadow-[0_0_60px_hsl(145_72%_44%/0.2),0_0_120px_hsl(145_72%_44%/0.08)]"
               : "border-game-lose/50 bg-[hsl(225_28%_4%/0.92)] shadow-[0_0_60px_hsl(0_75%_55%/0.2),0_0_120px_hsl(0_75%_55%/0.08)]"
           )}>
-            {/* Win shine sweep */}
             {isWon && (
               <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
                 <div className="absolute top-0 h-full w-1/2 bg-gradient-to-r from-transparent via-[hsl(0_0%_100%/0.08)] to-transparent animate-shine-sweep" />

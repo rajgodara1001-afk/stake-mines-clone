@@ -1,19 +1,27 @@
 import { useMinesGame } from "@/hooks/useMinesGame";
 import { MinesGrid } from "@/components/MinesGrid";
-import { Bomb, Minus, Plus, Wallet, Gem, Zap, TrendingUp } from "lucide-react";
+import { Bomb, Minus, Plus, Wallet, Zap, TrendingUp, Gem, Grid3X3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const QUICK_BETS = [50, 100, 200, 500, 1000];
-const MINE_OPTIONS = [1, 3, 5, 10, 15, 20, 24];
+const ROW_OPTIONS = [3, 4, 5];
 
 const Index = () => {
   const game = useMinesGame();
   const isPlaying = game.gameStatus === "playing";
-  const isIdle = game.gameStatus === "idle";
+
+  // Dynamic mine options based on grid size
+  const mineOptions = (() => {
+    const gs = game.gridSize;
+    const opts = [1, 2, 3, 5];
+    if (gs >= 20) opts.push(7, 10);
+    if (gs >= 25) opts.push(15, 20);
+    return opts.filter(n => n < gs);
+  })();
 
   return (
     <div className="h-[100dvh] bg-game-bg grid grid-rows-[auto_1fr_auto] overflow-hidden">
-      {/* Header - Sleek dark bar */}
+      {/* Header */}
       <header className="flex items-center justify-between px-4 py-2.5 header-bar">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/25 shadow-[0_0_15px_hsl(145_72%_44%/0.15)]">
@@ -37,6 +45,7 @@ const Index = () => {
         <div className="w-full max-w-[500px]">
           <MinesGrid
             grid={game.grid}
+            rows={game.rows}
             onTileClick={game.revealTile}
             disabled={game.gameStatus !== "playing"}
             gameStatus={game.gameStatus}
@@ -46,9 +55,9 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Bottom controls - Casino grade */}
+      {/* Bottom controls */}
       <div className="controls-panel px-3 sm:px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        {/* Live stats during game */}
+        {/* Live stats */}
         {isPlaying && game.revealed.size > 0 && (
           <div className="grid grid-cols-3 gap-2 mb-2.5 animate-float-up">
             {[
@@ -70,29 +79,54 @@ const Index = () => {
           </div>
         )}
 
-        {/* Mines selector */}
-        <div className="mb-2">
-          <label className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-semibold mb-1.5 block flex items-center gap-1">
-            <Bomb className="w-3 h-3" />
-            Mines
-          </label>
-          <div className="flex gap-1.5">
-            {MINE_OPTIONS.map((count) => (
-              <button
-                key={count}
-                onClick={() => game.setMineCount(count)}
-                disabled={isPlaying}
-                className={cn(
-                  "flex-1 h-8 sm:h-9 rounded-xl text-xs font-bold transition-all duration-200",
-                  game.mineCount === count
-                    ? "mine-btn-active"
-                    : "mine-btn-inactive",
-                  isPlaying && "opacity-25 cursor-not-allowed"
-                )}
-              >
-                {count}
-              </button>
-            ))}
+        {/* Row selector + Mine selector side by side */}
+        <div className="grid grid-cols-[auto_1fr] gap-3 mb-2">
+          {/* Rows */}
+          <div>
+            <label className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-semibold mb-1.5 flex items-center gap-1">
+              <Grid3X3 className="w-3 h-3" />
+              Rows
+            </label>
+            <div className="flex gap-1">
+              {ROW_OPTIONS.map((r) => (
+                <button
+                  key={r}
+                  onClick={() => game.setRows(r)}
+                  disabled={isPlaying}
+                  className={cn(
+                    "w-10 h-8 sm:h-9 rounded-xl text-xs font-bold transition-all duration-200",
+                    game.rows === r ? "mine-btn-active" : "mine-btn-inactive",
+                    isPlaying && "opacity-25 cursor-not-allowed"
+                  )}
+                >
+                  {r}×5
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Mines */}
+          <div>
+            <label className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-semibold mb-1.5 flex items-center gap-1">
+              <Bomb className="w-3 h-3" />
+              Mines
+            </label>
+            <div className="flex gap-1">
+              {mineOptions.map((count) => (
+                <button
+                  key={count}
+                  onClick={() => game.setMineCount(count)}
+                  disabled={isPlaying}
+                  className={cn(
+                    "flex-1 h-8 sm:h-9 rounded-xl text-xs font-bold transition-all duration-200",
+                    game.mineCount === count ? "mine-btn-active" : "mine-btn-inactive",
+                    isPlaying && "opacity-25 cursor-not-allowed"
+                  )}
+                >
+                  {count}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -127,7 +161,6 @@ const Index = () => {
               <Plus className="w-3.5 h-3.5" />
             </button>
           </div>
-          {/* Quick bets */}
           <div className="flex gap-1">
             <button
               onClick={() => game.setBetAmount(Math.max(10, Math.floor(game.betAmount / 2)))}
