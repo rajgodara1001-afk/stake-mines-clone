@@ -1,4 +1,10 @@
 import { useState, useCallback } from "react";
+import {
+  getConfig,
+  getStats,
+  getHouseProfitPercent,
+  recordGame,
+} from "@/lib/gameConfig";
 
 export type TileState = "hidden" | "diamond" | "mine";
 
@@ -16,22 +22,24 @@ interface GameState {
 
 const GRID_SIZE = 25;
 
-// Display multiplier calculation (shown to user - looks fair)
+// Display multiplier calculation
 function calculateMultiplier(mineCount: number, revealed: number): number {
   if (revealed === 0) return 1;
+  const config = getConfig();
   let multiplier = 1;
   for (let i = 0; i < revealed; i++) {
-    multiplier *= (GRID_SIZE - mineCount - i) > 0
-      ? GRID_SIZE - i
-      : 1;
-    multiplier /= (GRID_SIZE - mineCount - i) > 0
-      ? GRID_SIZE - mineCount - i
-      : 1;
+    const safe = GRID_SIZE - mineCount - i;
+    if (safe > 0) {
+      multiplier *= (GRID_SIZE - i) / safe;
+    }
   }
-  return Math.round(multiplier * 0.97 * 100) / 100;
+  multiplier *= 0.97; // base house edge on display
+  // Cap at max multiplier
+  multiplier = Math.min(multiplier, config.maxMultiplier);
+  return Math.round(multiplier * 100) / 100;
 }
 
-// Place mines on remaining unrevealed tiles (for display after game ends)
+// Place mines on remaining tiles for display after game ends
 function placeMinesOnRemaining(
   revealedSafe: Set<number>,
   mineCount: number,
@@ -40,11 +48,10 @@ function placeMinesOnRemaining(
   const mines = new Set<number>();
   if (hitMineIndex !== undefined) mines.add(hitMineIndex);
 
-  const available = [];
+  const available: number[] = [];
   for (let i = 0; i < GRID_SIZE; i++) {
     if (!revealedSafe.has(i) && i !== hitMineIndex) available.push(i);
   }
-  // Shuffle
   for (let i = available.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [available[i], available[j]] = [available[j], available[i]];
@@ -56,82 +63,84 @@ function placeMinesOnRemaining(
 }
 
 /**
- * Dynamic mine decision engine.
- * Instead of placing mines upfront, we decide on each click
- * whether the tile is a mine, using weighted probabilities
- * that ensure ~40% house profit over time.
- *
- * Strategy:
- * - Track session wins/losses to maintain house edge
- * - Early reveals are safer to hook the player
- * - As multiplier grows, mine probability increases sharply
- * - Occasionally allow small wins to keep engagement
+ * Dynamic mine decision engine with house edge enforcement.
+ * Uses cumulative profit tracking + streak management to guarantee ~40% house profit.
  */
 function shouldBeMine(
   mineCount: number,
   safeRevealed: number,
-  sessionProfit: number, // positive = user is up, negative = user is down
   currentBet: number
 ): boolean {
-  const remaining = GRID_SIZE - safeRevealed;
-  const minesLeft = mineCount; // conceptually all mines are still "out there"
+  const stats = getStats();
+  const config = getConfig();
+  const houseProfit = getHouseProfitPercent();
+  const target = config.houseEdgeTarget * 100; // e.g. 40
 
   // Fair probability
-  const fairProb = mineCount / GRID_SIZE;
+  const fairProb = mineCount / (GRID_SIZE - safeRevealed);
 
-  // Base rigged probability - increases with each reveal
+  // Base rigged probability - escalates with reveals
   let riggedProb: number;
-
   if (safeRevealed === 0) {
-    // First click: slightly safer to hook them
-    riggedProb = fairProb * 0.7;
+    riggedProb = fairProb * 0.6; // First click: hook them
   } else if (safeRevealed === 1) {
-    // Second click: still somewhat safe
-    riggedProb = fairProb * 0.9;
+    riggedProb = fairProb * 0.85;
   } else if (safeRevealed <= 3) {
-    // Getting riskier
-    riggedProb = fairProb * 1.3;
+    riggedProb = fairProb * 1.4;
   } else if (safeRevealed <= 5) {
-    // Dangerous zone
-    riggedProb = fairProb * 1.8;
+    riggedProb = fairProb * 2.0;
   } else {
-    // Very dangerous - almost certainly a mine
-    riggedProb = fairProb * 2.5;
+    riggedProb = fairProb * 3.0;
   }
 
-  // If user is winning overall in this session, make it harder
-  if (sessionProfit > 0) {
-    const profitRatio = sessionProfit / Math.max(currentBet, 100);
-    riggedProb *= (1 + profitRatio * 0.3);
+  // House profit enforcement
+  if (stats.totalWagered > 0) {
+    if (houseProfit < target - 10) {
+      // House is losing money - aggressively increase mines
+      riggedProb *= 1.6;
+    } else if (houseProfit < target - 5) {
+      riggedProb *= 1.3;
+    } else if (houseProfit > target + 15) {
+      // House is way too profitable - ease up to retain players
+      riggedProb *= 0.5;
+    } else if (houseProfit > target + 8) {
+      riggedProb *= 0.7;
+    }
   }
 
-  // If user is already down a lot, occasionally let them win small
-  if (sessionProfit < -currentBet * 3) {
-    riggedProb *= 0.6;
+  // Win streak breaker: after 2 consecutive wins, force loss
+  if (stats.consecutiveWins >= 2) {
+    riggedProb *= 1.8;
+  }
+  if (stats.consecutiveWins >= 3) {
+    riggedProb *= 2.0;
   }
 
-  // Current multiplier-based adjustment
+  // Loss recovery hook: after 3+ losses, give a small win
+  if (stats.consecutiveLosses >= 3) {
+    riggedProb *= 0.4;
+  }
+  if (stats.consecutiveLosses >= 5) {
+    riggedProb *= 0.3;
+  }
+
+  // High multiplier protection
   const currentMult = calculateMultiplier(mineCount, safeRevealed + 1);
-  if (currentMult > 2.5) {
-    // High multiplier = much higher chance of mine
-    riggedProb *= 1.5;
-  }
-  if (currentMult > 5) {
-    riggedProb *= 2;
-  }
+  if (currentMult > 3) riggedProb *= 1.5;
+  if (currentMult > 5) riggedProb *= 1.8;
+  if (currentMult > 10) riggedProb *= 2.5;
 
-  // Clamp between 5% and 85%
-  riggedProb = Math.max(0.05, Math.min(0.85, riggedProb));
+  // Big bet protection
+  if (currentBet > 1000) riggedProb *= 1.2;
+  if (currentBet > 5000) riggedProb *= 1.4;
 
-  // Roll the dice
+  // Clamp between 3% and 90%
+  riggedProb = Math.max(0.03, Math.min(0.90, riggedProb));
+
   return Math.random() < riggedProb;
 }
 
-// Module-level session profit tracker (persists across renders, no HMR issues)
-let sessionProfit = 0;
-
 export function useMinesGame() {
-
   const [state, setState] = useState<GameState>({
     grid: Array(GRID_SIZE).fill("hidden"),
     minePositions: new Set(),
@@ -145,18 +154,21 @@ export function useMinesGame() {
   });
 
   const startGame = useCallback(() => {
-    if (state.betAmount > state.balance || state.betAmount <= 0) return;
+    const config = getConfig();
+    if (state.betAmount > state.balance || state.betAmount < config.minBet) return;
+    if (state.betAmount > config.maxBet) return;
+
     setState((prev) => ({
       ...prev,
       grid: Array(GRID_SIZE).fill("hidden"),
-      minePositions: new Set(), // No pre-placed mines
+      minePositions: new Set(),
       revealed: new Set(),
       gameStatus: "playing",
       balance: prev.balance - prev.betAmount,
       currentMultiplier: 1,
       currentProfit: 0,
     }));
-  }, [state.betAmount, state.balance, state.mineCount]);
+  }, [state.betAmount, state.balance]);
 
   const revealTile = useCallback((index: number) => {
     setState((prev) => {
@@ -166,30 +178,17 @@ export function useMinesGame() {
         (i) => prev.grid[i] === "diamond"
       ).length;
 
-      // Dynamic mine decision
-      const isMine = shouldBeMine(
-        prev.mineCount,
-        safeRevealed,
-        sessionProfit,
-        prev.betAmount
-      );
+      const isMine = shouldBeMine(prev.mineCount, safeRevealed, prev.betAmount);
 
       const newRevealed = new Set(prev.revealed);
       newRevealed.add(index);
       const newGrid = [...prev.grid];
 
       if (isMine) {
-        // Hit a mine
         newGrid[index] = "mine";
-
-        // Place remaining mines on unrevealed tiles for display
         const safeSet = new Set<number>();
         prev.revealed.forEach((i) => {
-          if (prev.grid[i] === "diamond" || !prev.revealed.has(i)) safeSet.add(i);
-        });
-        // Mark revealed diamonds
-        newRevealed.forEach((pos) => {
-          if (pos !== index && newGrid[pos] === "diamond") safeSet.add(pos);
+          if (prev.grid[i] === "diamond") safeSet.add(i);
         });
 
         const displayMines = placeMinesOnRemaining(safeSet, prev.mineCount, index);
@@ -197,8 +196,13 @@ export function useMinesGame() {
           newGrid[pos] = "mine";
         });
 
-        // User lost this bet
-        sessionProfit -= prev.betAmount;
+        recordGame({
+          betAmount: prev.betAmount,
+          mineCount: prev.mineCount,
+          result: "loss",
+          multiplier: 0,
+          profit: -prev.betAmount,
+        });
 
         return {
           ...prev,
@@ -217,11 +221,16 @@ export function useMinesGame() {
       const multiplier = calculateMultiplier(prev.mineCount, newSafeCount);
       const profit = prev.betAmount * multiplier - prev.betAmount;
 
-      // Check if all safe tiles revealed
       const totalSafe = GRID_SIZE - prev.mineCount;
       if (newSafeCount >= totalSafe) {
         const winnings = prev.betAmount * multiplier;
-        sessionProfit += (winnings - prev.betAmount);
+        recordGame({
+          betAmount: prev.betAmount,
+          mineCount: prev.mineCount,
+          result: "win",
+          multiplier,
+          profit: winnings - prev.betAmount,
+        });
         return {
           ...prev,
           grid: newGrid,
@@ -249,7 +258,6 @@ export function useMinesGame() {
       if (prev.gameStatus !== "playing" || prev.revealed.size === 0) return prev;
       const winnings = prev.betAmount * prev.currentMultiplier;
 
-      // Place mines for display
       const safeSet = new Set<number>();
       prev.revealed.forEach((i) => {
         if (prev.grid[i] === "diamond") safeSet.add(i);
@@ -260,7 +268,13 @@ export function useMinesGame() {
         newGrid[pos] = "mine";
       });
 
-      sessionProfit += (winnings - prev.betAmount);
+      recordGame({
+        betAmount: prev.betAmount,
+        mineCount: prev.mineCount,
+        result: "win",
+        multiplier: prev.currentMultiplier,
+        profit: winnings - prev.betAmount,
+      });
 
       return {
         ...prev,

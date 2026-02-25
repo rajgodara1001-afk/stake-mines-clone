@@ -1,10 +1,9 @@
 import { useMinesGame } from "@/hooks/useMinesGame";
 import { MinesGrid } from "@/components/MinesGrid";
-import { Button } from "@/components/ui/button";
-import { Bomb, Minus, Plus, Wallet, Gem, Zap } from "lucide-react";
+import { Bomb, Minus, Plus, Wallet, Gem, Zap, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const QUICK_BETS = [50, 100, 200, 500];
+const QUICK_BETS = [50, 100, 200, 500, 1000];
 const MINE_OPTIONS = [1, 3, 5, 10, 15, 20, 24];
 
 const Index = () => {
@@ -14,15 +13,18 @@ const Index = () => {
 
   return (
     <div className="h-[100dvh] bg-game-bg grid grid-rows-[auto_1fr_auto] overflow-hidden">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-2 glass-surface border-b border-border/50">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center border border-primary/20">
-            <Bomb className="w-4 h-4 text-primary" />
+      {/* Header - Sleek dark bar */}
+      <header className="flex items-center justify-between px-4 py-2.5 header-bar">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/25 shadow-[0_0_15px_hsl(145_72%_44%/0.15)]">
+            <Bomb className="w-4.5 h-4.5 text-primary" />
           </div>
-          <span className="font-bold text-foreground text-base tracking-tight">Mines</span>
+          <div>
+            <span className="font-extrabold text-foreground text-base tracking-tight block leading-tight">MINES</span>
+            <span className="text-[9px] text-muted-foreground uppercase tracking-[0.2em]">Pro Edition</span>
+          </div>
         </div>
-        <div className="glass-surface rounded-full px-3.5 py-1.5 flex items-center gap-2">
+        <div className="balance-chip">
           <Wallet className="w-3.5 h-3.5 text-game-gold" />
           <span className="font-mono text-sm text-foreground font-bold">
             ₹{game.balance.toLocaleString("en-IN")}
@@ -30,8 +32,8 @@ const Index = () => {
         </div>
       </header>
 
-      {/* Grid area - fills remaining space */}
-      <div className="min-h-0 flex-1 flex items-stretch justify-center p-2">
+      {/* Grid area */}
+      <div className="min-h-0 flex-1 flex items-stretch justify-center p-2 sm:p-3">
         <div className="w-full max-w-[500px]">
           <MinesGrid
             grid={game.grid}
@@ -44,20 +46,23 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Bottom controls */}
-      <div className="glass-surface border-t border-border/50 px-3 sm:px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        {/* Live stats - only during game */}
+      {/* Bottom controls - Casino grade */}
+      <div className="controls-panel px-3 sm:px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        {/* Live stats during game */}
         {isPlaying && game.revealed.size > 0 && (
-          <div className="grid grid-cols-3 gap-1.5 mb-2 animate-float-up">
+          <div className="grid grid-cols-3 gap-2 mb-2.5 animate-float-up">
             {[
-              { label: "Multiplier", value: `${game.currentMultiplier}×`, accent: true },
-              { label: "Next", value: `${game.nextMultiplier}×`, accent: false },
-              { label: "Profit", value: `+₹${game.currentProfit.toFixed(0)}`, accent: game.currentProfit > 0 },
+              { label: "Multiplier", value: `${game.currentMultiplier}×`, icon: TrendingUp, accent: true },
+              { label: "Next", value: `${game.nextMultiplier}×`, icon: Gem, accent: false },
+              { label: "Profit", value: `+₹${game.currentProfit.toFixed(0)}`, icon: Wallet, accent: game.currentProfit > 0 },
             ].map((stat) => (
-              <div key={stat.label} className="rounded-lg px-2 py-1.5 text-center bg-secondary/60 border border-border/40">
-                <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-medium">{stat.label}</p>
+              <div key={stat.label} className="stat-card">
+                <div className="flex items-center gap-1 justify-center mb-0.5">
+                  <stat.icon className="w-2.5 h-2.5 text-muted-foreground" />
+                  <p className="text-[8px] text-muted-foreground uppercase tracking-[0.15em] font-semibold">{stat.label}</p>
+                </div>
                 <p className={cn(
-                  "font-mono font-bold text-xs sm:text-sm mt-0.5",
+                  "font-mono font-extrabold text-sm",
                   stat.accent ? "text-game-win text-shadow-glow" : "text-foreground"
                 )}>{stat.value}</p>
               </div>
@@ -66,23 +71,23 @@ const Index = () => {
         )}
 
         {/* Mines selector */}
-        <div className="mb-1.5">
-          <label className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-semibold mb-1 block">
-            <Gem className="w-3 h-3 inline-block mr-1 -mt-0.5" />
-            Mines Count
+        <div className="mb-2">
+          <label className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-semibold mb-1.5 block flex items-center gap-1">
+            <Bomb className="w-3 h-3" />
+            Mines
           </label>
-          <div className="flex gap-1 sm:gap-1.5">
+          <div className="flex gap-1.5">
             {MINE_OPTIONS.map((count) => (
               <button
                 key={count}
                 onClick={() => game.setMineCount(count)}
                 disabled={isPlaying}
                 className={cn(
-                  "flex-1 h-7 sm:h-8 rounded-lg text-[11px] font-bold transition-all duration-150",
+                  "flex-1 h-8 sm:h-9 rounded-xl text-xs font-bold transition-all duration-200",
                   game.mineCount === count
-                    ? "bg-primary text-primary-foreground shadow-[0_0_12px_hsl(145_72%_44%/0.3)] scale-[1.05]"
-                    : "bg-secondary text-muted-foreground hover:text-foreground hover:bg-secondary/80",
-                  isPlaying && "opacity-30 cursor-not-allowed"
+                    ? "mine-btn-active"
+                    : "mine-btn-inactive",
+                  isPlaying && "opacity-25 cursor-not-allowed"
                 )}
               >
                 {count}
@@ -92,32 +97,32 @@ const Index = () => {
         </div>
 
         {/* Bet amount */}
-        <div className="mb-2">
-          <label className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-semibold mb-1 block">
+        <div className="mb-2.5">
+          <label className="text-[9px] text-muted-foreground uppercase tracking-[0.15em] font-semibold mb-1.5 block">
             Bet Amount
           </label>
-          <div className="flex items-center gap-1 mb-1">
+          <div className="flex items-center gap-1.5 mb-1.5">
             <button
               onClick={() => game.setBetAmount(Math.max(10, game.betAmount - 50))}
               disabled={isPlaying}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/80 active:scale-95 disabled:opacity-30 transition-all"
+              className="bet-adjust-btn"
             >
               <Minus className="w-3.5 h-3.5" />
             </button>
             <div className="flex-1 relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-mono">₹</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-game-gold text-xs font-mono font-bold">₹</span>
               <input
                 type="number"
                 value={game.betAmount}
                 onChange={(e) => game.setBetAmount(Number(e.target.value))}
                 disabled={isPlaying}
-                className="w-full bg-secondary rounded-lg pl-6 pr-3 py-1.5 sm:py-2 font-mono text-foreground text-xs sm:text-sm text-center border border-border/40 outline-none focus:border-primary/50 disabled:opacity-30 transition-all"
+                className="bet-input"
               />
             </div>
             <button
               onClick={() => game.setBetAmount(game.betAmount + 50)}
               disabled={isPlaying}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-secondary flex items-center justify-center text-foreground hover:bg-secondary/80 active:scale-95 disabled:opacity-30 transition-all"
+              className="bet-adjust-btn"
             >
               <Plus className="w-3.5 h-3.5" />
             </button>
@@ -127,7 +132,7 @@ const Index = () => {
             <button
               onClick={() => game.setBetAmount(Math.max(10, Math.floor(game.betAmount / 2)))}
               disabled={isPlaying}
-              className="flex-1 h-7 rounded-md bg-secondary/70 text-muted-foreground text-[10px] font-bold hover:text-foreground hover:bg-secondary active:scale-95 disabled:opacity-30 transition-all border border-border/30"
+              className="quick-bet-btn"
             >
               ½
             </button>
@@ -137,19 +142,16 @@ const Index = () => {
                 onClick={() => game.setBetAmount(amt)}
                 disabled={isPlaying}
                 className={cn(
-                  "flex-1 h-7 rounded-md text-[10px] font-bold transition-all active:scale-95 disabled:opacity-30 border",
-                  game.betAmount === amt
-                    ? "bg-primary/15 text-primary border-primary/30"
-                    : "bg-secondary/70 text-muted-foreground hover:text-foreground border-border/30 hover:bg-secondary"
+                  game.betAmount === amt ? "quick-bet-btn-active" : "quick-bet-btn"
                 )}
               >
-                {amt}
+                {amt >= 1000 ? `${amt/1000}K` : amt}
               </button>
             ))}
             <button
               onClick={() => game.setBetAmount(Math.min(game.balance, game.betAmount * 2))}
               disabled={isPlaying}
-              className="flex-1 h-7 rounded-md bg-secondary/70 text-muted-foreground text-[10px] font-bold hover:text-foreground hover:bg-secondary active:scale-95 disabled:opacity-30 transition-all border border-border/30"
+              className="quick-bet-btn"
             >
               2×
             </button>
@@ -162,27 +164,25 @@ const Index = () => {
             onClick={game.cashOut}
             disabled={game.revealed.size === 0}
             className={cn(
-              "w-full h-10 sm:h-11 rounded-xl text-sm font-extrabold transition-all duration-200",
-              "bg-game-win text-primary-foreground btn-glow-green",
-              "hover:brightness-110 active:scale-[0.98]",
-              "disabled:opacity-40 disabled:shadow-none"
+              "w-full h-11 sm:h-12 rounded-2xl text-sm font-extrabold transition-all duration-200",
+              "cashout-btn",
+              "disabled:opacity-30 disabled:shadow-none"
             )}
           >
             <Zap className="w-4 h-4 inline-block mr-1.5 -mt-0.5" />
-            Cash Out • {game.currentMultiplier}× (₹{(game.betAmount * game.currentMultiplier).toFixed(0)})
+            CASH OUT • {game.currentMultiplier}× (₹{(game.betAmount * game.currentMultiplier).toFixed(0)})
           </button>
         ) : (
           <button
             onClick={game.startGame}
             disabled={game.betAmount > game.balance || game.betAmount <= 0}
             className={cn(
-              "w-full h-10 sm:h-11 rounded-xl text-sm font-extrabold transition-all duration-200",
-              "bg-primary text-primary-foreground btn-glow-primary",
-              "hover:brightness-110 active:scale-[0.98]",
-              "disabled:opacity-40 disabled:shadow-none"
+              "w-full h-11 sm:h-12 rounded-2xl text-sm font-extrabold transition-all duration-200",
+              "start-btn",
+              "disabled:opacity-30 disabled:shadow-none"
             )}
           >
-            Bet ₹{game.betAmount.toLocaleString("en-IN")}
+            BET ₹{game.betAmount.toLocaleString("en-IN")}
           </button>
         )}
       </div>
