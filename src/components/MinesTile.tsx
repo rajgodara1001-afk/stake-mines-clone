@@ -19,7 +19,7 @@ export function MinesTile({ state, index, onClick, disabled, gameOver }: MinesTi
       onClick={() => onClick(index)}
       disabled={disabled || isRevealed}
       className={cn(
-        "relative aspect-square rounded-xl transition-all duration-150 select-none",
+        "relative aspect-square rounded-lg sm:rounded-xl transition-all duration-150 select-none",
         "flex items-center justify-center overflow-hidden",
         // Hidden - playable
         !isRevealed && !disabled &&
